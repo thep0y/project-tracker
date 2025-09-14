@@ -27,20 +27,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 构建路由
     let app = Router::new()
-        .route("/api/track/{project_name}", post(handlers::track_visit))
+        .route("/track/{project_name}", post(handlers::track_visit))
+        .route("/stats/{project_name}", get(handlers::get_project_stats))
+        .route("/stats", get(handlers::get_all_stats))
         .route(
-            "/api/stats/{project_name}",
-            get(handlers::get_project_stats),
-        )
-        .route("/api/stats", get(handlers::get_all_stats))
-        .route(
-            "/api/stats/{project_name}/time",
+            "/stats/{project_name}/time",
             get(handlers::get_project_stats_by_time),
         )
-        .route(
-            "/api/stats/time",
-            get(handlers::get_all_projects_stats_by_time),
-        )
+        .route("/stats/time", get(handlers::get_all_projects_stats_by_time))
         .layer(CorsLayer::permissive())
         .with_state(pool);
 
