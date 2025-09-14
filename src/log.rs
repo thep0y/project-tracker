@@ -13,11 +13,7 @@ pub fn init() {
         }
     });
 
-    let env_filter = format!(
-        "{}={}",
-        env::var("CARGO_PKG_NAME").unwrap().replace("-", "_"),
-        log_level
-    );
+    let env_filter = format!("{}={}", env!("CARGO_PKG_NAME").replace("-", "_"), log_level);
 
     if cfg!(debug_assertions) {
         // 开发环境：输出到stderr
