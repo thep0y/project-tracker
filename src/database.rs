@@ -1,6 +1,6 @@
 use sqlx::{query, query_as, SqlitePool};
 
-use crate::models::{CountryStats, Project, ProjectDetailedStats, ProjectStats, Visit};
+use crate::models::{CountryStats, Platform, Project, ProjectDetailedStats, ProjectStats, Visit};
 
 pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
     let pool = SqlitePool::connect("sqlite:project_tracker.db?mode=rwc")
@@ -17,6 +17,7 @@ pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
         CREATE TABLE IF NOT EXISTS visits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_name TEXT NOT NULL,
+            platform TEXT NOT NULL,
             ip_address TEXT NOT NULL,
             country TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -40,6 +41,14 @@ pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
             e
         })?;
 
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_visits_platform ON visits(platform)")
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            error!("数据库索引`idx_visits_platform`创建失败: {:?}", e);
+            e
+        })?;
+
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_visits_created_at ON visits(created_at)")
         .execute(&pool)
         .await
@@ -56,11 +65,13 @@ pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
 pub async fn insert_visit(
     pool: &SqlitePool,
     project_name: &Project,
+    platform: &Platform,
     ip_address: &str,
     country: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    query("INSERT INTO visits (project_name, ip_address, country) VALUES (?, ?, ?)")
+    query("INSERT INTO visits (project_name, platform, ip_address, country) VALUES (?, ?, ?, ?)")
         .bind(project_name)
+        .bind(platform)
         .bind(ip_address)
         .bind(country)
         .execute(pool)

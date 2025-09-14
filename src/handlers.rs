@@ -6,11 +6,12 @@ use axum::{
 use serde_json::json;
 use sqlx::SqlitePool;
 
-use crate::models::{QueryParams, TimeQuery, TrackResponse};
+use crate::models::{PlatformParams, TimeQuery, TimeQueryParams, TrackResponse};
 use crate::{database, models::Project};
 
 pub async fn track_visit(
     Path(project_name): Path<Project>,
+    Query(params): Query<PlatformParams>,
     State(pool): State<SqlitePool>,
     headers: HeaderMap,
 ) -> Result<Json<TrackResponse>, axum::http::StatusCode> {
@@ -21,7 +22,15 @@ pub async fn track_visit(
     let country = get_country_from_ip(&ip_address).await;
 
     // 插入访问记录
-    match database::insert_visit(&pool, &project_name, &ip_address, country.as_deref()).await {
+    match database::insert_visit(
+        &pool,
+        &project_name,
+        &params.platform,
+        &ip_address,
+        country.as_deref(),
+    )
+    .await
+    {
         Ok(_) => Ok(Json(TrackResponse {
             success: true,
             message: "Visit tracked successfully".to_string(),
@@ -54,7 +63,7 @@ pub async fn get_all_stats(
 /// 根据时间查询特定项目的统计数据
 pub async fn get_project_stats_by_time(
     Path(project_name): Path<Project>,
-    Query(params): Query<QueryParams>,
+    Query(params): Query<TimeQueryParams>,
     State(pool): State<SqlitePool>,
 ) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
     // TODO: 当前可能存在问题，等数据多了以后再完善
@@ -95,7 +104,7 @@ pub async fn get_project_stats_by_time(
 
 /// 根据时间查询所有项目的统计数据
 pub async fn get_all_projects_stats_by_time(
-    Query(params): Query<QueryParams>,
+    Query(params): Query<TimeQueryParams>,
     State(pool): State<SqlitePool>,
 ) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
     // TODO: 当前可能存在问题，等数据多了以后再完善

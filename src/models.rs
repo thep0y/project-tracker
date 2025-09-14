@@ -39,11 +39,23 @@ impl Project {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Windows,
+    MacOS,
+    Linux,
+    Harmony,
+    Android,
+    Unknown,
+}
+
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Visit {
     pub id: i64,
     pub project_name: Project,
     pub ip_address: String,
+    pub platform: Platform,
     pub country: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: time::OffsetDateTime,
@@ -99,6 +111,11 @@ pub enum TimeQuery {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct QueryParams {
+pub struct TimeQueryParams {
     pub time: Option<TimeQuery>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PlatformParams {
+    pub platform: Platform,
 }
