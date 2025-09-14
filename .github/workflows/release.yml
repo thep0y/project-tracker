@@ -40,6 +40,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/release/deps
+            target/release/build
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
       - name: Install cargo-edit
         run: |
           cargo install cargo-edit
@@ -73,20 +87,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y upx-ucl
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/release/deps
-            target/release/build
-          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-
-
       - name: Build
         run: |
           cargo build --release
@@ -106,8 +106,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
           draft: false
           prerelease: false
           body: ${{ steps.github_release_changelog.outputs.changelog }}
@@ -137,3 +137,27 @@ jobs:
           git merge release --ff-only
           git push origin main
         continue-on-error: false
+
+  cleanup-release-branch:
+    needs: update-main-version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    if: success()
+
+    steps:
+      - name: Delete release branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'heads/release'
+              })
+              console.log('Release branch deleted successfully')
+            } catch (error) {
+              console.log('Failed to delete release branch:', error.message)
+              // 不让这个失败阻止整个工作流
+            }
