@@ -54,7 +54,7 @@ jobs:
       - name: Create and push release branch
         run: |
           git checkout -b release
-          git add Cargo.toml
+          git add Cargo.toml Cargo.lock
           git commit -m "Bump version to ${{ env.VERSION }}"
           git push origin release --force
 
