@@ -40,7 +40,7 @@ jobs:
           # 从标签中提取版本号（去掉 'v' 前缀）
           VERSION=${GITHUB_REF_NAME#v}
           PACKAGE_NAME=${{ github.event.repository.name }}-v${VERSION}-linux-x64
-          tar -czf ${PACKAGE_NAME}.tar.gz target/release/${{ env.BINARY_NAME }}
+          tar -czf ${PACKAGE_NAME}.tar.gz -C target/release ${{ env.BINARY_NAME }}
           echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
 
       - name: Create Release
