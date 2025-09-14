@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(pool);
 
     // 启动服务器
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3162));
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
         error!("服务器绑定失败: {:?}", e);
         e
