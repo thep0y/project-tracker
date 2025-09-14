@@ -1,29 +1,91 @@
-name: Release
-
+name: "Bump new version"
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
 
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
   release:
-    name: Build and Release
-    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-edit
+        run: |
+          cargo install cargo-edit
+
+      - name: Bump version
+        run: |
+          cargo set-version --bump ${{ github.event.inputs.bump_type }}
+          VERSION=$(cargo pkgid | sed 's/.*#\([^:]*\)$/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Bumping version to: $VERSION"
+
+      - name: Create and push release branch
+        run: |
+          git checkout -b release
+          git add Cargo.toml
+          git commit -m "Bump version to ${{ env.VERSION }}"
+          git push origin release --force
+
+      - name: Build changelog
+        id: github_release_changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: ".github/changelog-configuration.json"
+          toTag: "refs/heads/main"
+          failOnError: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install UPX
         run: |
           sudo apt-get update
           sudo apt-get install -y upx-ucl
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/release/deps
+            target/release/build
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
 
       - name: Build
         run: |
@@ -37,9 +99,7 @@ jobs:
 
       - name: Package as tar.gz
         run: |
-          # 从标签中提取版本号（去掉 'v' 前缀）
-          VERSION=${GITHUB_REF_NAME#v}
-          PACKAGE_NAME=${{ github.event.repository.name }}-v${VERSION}-linux-x64
+          PACKAGE_NAME=${{ github.event.repository.name }}-v${{ env.VERSION }}-linux-x64
           tar -czf ${PACKAGE_NAME}.tar.gz -C target/release ${{ env.BINARY_NAME }}
           echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
 
@@ -47,8 +107,33 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           draft: false
           prerelease: false
+          body: ${{ steps.github_release_changelog.outputs.changelog }}
           generate_release_notes: true
           files: ${{ env.ASSET_NAME }}
+
+  update-main-version:
+    needs: release
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Update main version
+        run: |
+          git fetch origin release:release
+          git checkout main
+          git merge release --ff-only
+          git push origin main
+        continue-on-error: false
