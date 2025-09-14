@@ -1,5 +1,6 @@
-use crate::models::{CountryStats, Project, ProjectDetailedStats, ProjectStats, Visit};
 use sqlx::{query, query_as, SqlitePool};
+
+use crate::models::{CountryStats, Project, ProjectDetailedStats, ProjectStats, Visit};
 
 pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
     let pool = SqlitePool::connect("sqlite:project_tracker.db?mode=rwc")
@@ -179,12 +180,225 @@ pub async fn get_project_detailed_stats(
     let country_stats = get_country_stats(pool, project_name).await?;
     let recent_visits = get_recent_visits(pool, project_name, 10).await?;
 
+    let project_name = basic_stats.project_name;
+    let repository = project_name.repository().to_owned();
+    let icon = project_name.icon().to_owned();
+    let description = project_name.description().to_owned();
+
     Ok(ProjectDetailedStats {
-        repository: basic_stats.project_name.repository().to_string(),
-        project_name: basic_stats.project_name,
+        project_name,
+        repository,
+        icon,
+        description,
         total_visits: basic_stats.total_visits,
         unique_visitors: basic_stats.unique_visitors,
         country_stats,
         recent_visits,
     })
+}
+
+/// 根据特定日期查询项目统计（格式：YYYY-MM-DD）
+pub async fn get_project_stats_by_date(
+    pool: &SqlitePool,
+    project_name: &Project,
+    date: &str,
+) -> Result<ProjectStats, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            ? as project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE project_name = ? 
+        AND DATE(created_at) = ?
+        "#,
+    )
+    .bind(project_name)
+    .bind(project_name)
+    .bind(date)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        error!("按日期查询数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 根据特定月份查询项目统计（格式：YYYY-MM）
+pub async fn get_project_stats_by_month(
+    pool: &SqlitePool,
+    project_name: &Project,
+    year_month: &str,
+) -> Result<ProjectStats, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            ? as project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE project_name = ? 
+        AND strftime('%Y-%m', created_at) = ?
+        "#,
+    )
+    .bind(project_name)
+    .bind(project_name)
+    .bind(year_month)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        error!("按月份查询数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 根据特定年份查询项目统计（格式：YYYY）
+pub async fn get_project_stats_by_year(
+    pool: &SqlitePool,
+    project_name: &Project,
+    year: &str,
+) -> Result<ProjectStats, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            ? as project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE project_name = ? 
+        AND strftime('%Y', created_at) = ?
+        "#,
+    )
+    .bind(project_name)
+    .bind(project_name)
+    .bind(year)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        error!("按年份查询数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 获取所有项目在特定日期的统计（格式：YYYY-MM-DD）
+pub async fn get_all_projects_stats_by_date(
+    pool: &SqlitePool,
+    date: &str,
+) -> Result<Vec<ProjectStats>, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE DATE(created_at) = ?
+        GROUP BY project_name
+        ORDER BY total_visits DESC
+        "#,
+    )
+    .bind(date)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        error!("按日期查询所有项目数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 获取所有项目在特定月份的统计（格式：YYYY-MM）
+pub async fn get_all_projects_stats_by_month(
+    pool: &SqlitePool,
+    year_month: &str,
+) -> Result<Vec<ProjectStats>, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE strftime('%Y-%m', created_at) = ?
+        GROUP BY project_name
+        ORDER BY total_visits DESC
+        "#,
+    )
+    .bind(year_month)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        error!("按月份查询所有项目数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 获取所有项目在特定年份的统计（格式：YYYY）
+pub async fn get_all_projects_stats_by_year(
+    pool: &SqlitePool,
+    year: &str,
+) -> Result<Vec<ProjectStats>, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE strftime('%Y', created_at) = ?
+        GROUP BY project_name
+        ORDER BY total_visits DESC
+        "#,
+    )
+    .bind(year)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        error!("按年份查询所有项目数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
+}
+
+/// 根据日期范围查询项目统计（格式：YYYY-MM-DD）
+pub async fn get_project_stats_by_date_range(
+    pool: &SqlitePool,
+    project_name: &Project,
+    start_date: &str,
+    end_date: &str,
+) -> Result<ProjectStats, sqlx::Error> {
+    let stats = query_as::<_, ProjectStats>(
+        r#"
+        SELECT 
+            ? as project_name,
+            COUNT(*) as total_visits,
+            COUNT(DISTINCT ip_address) as unique_visitors
+        FROM visits 
+        WHERE project_name = ? 
+        AND DATE(created_at) BETWEEN ? AND ?
+        "#,
+    )
+    .bind(project_name)
+    .bind(project_name)
+    .bind(start_date)
+    .bind(end_date)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        error!("按日期范围查询数据库失败: {:?}", e);
+        e
+    })?;
+
+    Ok(stats)
 }

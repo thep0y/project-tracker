@@ -1,8 +1,9 @@
+use std::net::SocketAddr;
+
 use axum::{
     routing::{get, post},
     Router,
 };
-use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
 #[macro_use]
@@ -32,6 +33,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(handlers::get_project_stats),
         )
         .route("/api/stats", get(handlers::get_all_stats))
+        .route(
+            "/api/stats/{project_name}/time",
+            get(handlers::get_project_stats_by_time),
+        )
+        .route(
+            "/api/stats/time",
+            get(handlers::get_all_projects_stats_by_time),
+        )
         .layer(CorsLayer::permissive())
         .with_state(pool);
 
