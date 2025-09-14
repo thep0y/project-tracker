@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install UPX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx-ucl
+
+      - name: Build
+        run: |
+          cargo build --release
+
+      - name: Compress with UPX
+        run: |
+          BINARY_NAME=$(basename $(find target/release -maxdepth 1 -type f -executable -not -name "*.*" | head -n 1))
+          echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
+          upx --best --lzma target/release/${BINARY_NAME}
+
+      - name: Package as tar.gz
+        run: |
+          # 从标签中提取版本号（去掉 'v' 前缀）
+          VERSION=${GITHUB_REF_NAME#v}
+          PACKAGE_NAME=${{ github.event.repository.name }}-v${VERSION}-linux-x64
+          tar -czf ${PACKAGE_NAME}.tar.gz target/release/${{ env.BINARY_NAME }}
+          echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: ${{ env.ASSET_NAME }}
