@@ -72,7 +72,7 @@ pub async fn get_project_stats_by_time(
             return match database::get_project_detailed_stats(&pool, &project_name).await {
                 Ok(stats) => Ok(Json(json!(stats))),
                 Err(_) => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
-            }
+            };
         }
         Some(t) => t,
     };
@@ -115,7 +115,7 @@ pub async fn get_all_projects_stats_by_time(
                     "projects": stats
                 }))),
                 Err(_) => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
-            }
+            };
         }
         Some(t) => t,
     };
@@ -142,21 +142,21 @@ pub async fn get_all_projects_stats_by_time(
 
 fn get_client_ip(headers: &HeaderMap) -> String {
     // 尝试从各种可能的头部获取真实IP
-    if let Some(ip) = headers.get("x-forwarded-for") {
-        if let Ok(ip_str) = ip.to_str() {
-            return ip_str
-                .split(',')
-                .next()
-                .unwrap_or("unknown")
-                .trim()
-                .to_string();
-        }
+    if let Some(ip) = headers.get("x-forwarded-for")
+        && let Ok(ip_str) = ip.to_str()
+    {
+        return ip_str
+            .split(',')
+            .next()
+            .unwrap_or("unknown")
+            .trim()
+            .to_string();
     }
 
-    if let Some(ip) = headers.get("x-real-ip") {
-        if let Ok(ip_str) = ip.to_str() {
-            return ip_str.to_string();
-        }
+    if let Some(ip) = headers.get("x-real-ip")
+        && let Ok(ip_str) = ip.to_str()
+    {
+        return ip_str.to_string();
     }
 
     "unknown".to_string()

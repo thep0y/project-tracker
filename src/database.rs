@@ -1,4 +1,4 @@
-use sqlx::{query, query_as, SqlitePool};
+use sqlx::{SqlitePool, query, query_as};
 
 use crate::models::{CountryStats, Platform, Project, ProjectDetailedStats, ProjectStats, Visit};
 
@@ -88,17 +88,15 @@ pub async fn get_project_stats(
     pool: &SqlitePool,
     project_name: &Project,
 ) -> Result<ProjectStats, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (u64, u64)>(
         r#"
-        SELECT 
-            ? as project_name,
+        SELECT
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
+        FROM visits
         WHERE project_name = ?
         "#,
     )
-    .bind(project_name)
     .bind(project_name)
     .fetch_one(pool)
     .await
@@ -107,17 +105,17 @@ pub async fn get_project_stats(
         e
     })?;
 
-    Ok(stats)
+    Ok(ProjectStats::new(project_name.clone(), stats.0, stats.1))
 }
 
 pub async fn get_all_projects_stats(pool: &SqlitePool) -> Result<Vec<ProjectStats>, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (String, u64, u64)>(
         r#"
-        SELECT 
+        SELECT
             project_name,
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
+        FROM visits
         GROUP BY project_name
         ORDER BY total_visits DESC
         "#,
@@ -129,7 +127,10 @@ pub async fn get_all_projects_stats(pool: &SqlitePool) -> Result<Vec<ProjectStat
         e
     })?;
 
-    Ok(stats)
+    Ok(stats
+        .into_iter()
+        .map(|s| ProjectStats::new_unchecked(s.0, s.1, s.2))
+        .collect())
 }
 
 pub async fn get_country_stats(
@@ -138,10 +139,10 @@ pub async fn get_country_stats(
 ) -> Result<Vec<CountryStats>, sqlx::Error> {
     let stats = query_as::<_, CountryStats>(
         r#"
-        SELECT 
+        SELECT
             country,
             COUNT(*) as visit_count
-        FROM visits 
+        FROM visits
         WHERE project_name = ?
         GROUP BY country
         ORDER BY visit_count DESC
@@ -165,7 +166,7 @@ pub async fn get_recent_visits(
 ) -> Result<Vec<Visit>, sqlx::Error> {
     let visits: Vec<Visit> = query_as::<_, Visit>(
         r#"
-        SELECT * FROM visits 
+        SELECT * FROM visits
         WHERE project_name = ?
         ORDER BY created_at DESC
         LIMIT ?
@@ -211,22 +212,20 @@ pub async fn get_project_detailed_stats(
 /// 根据特定日期查询项目统计（格式：YYYY-MM-DD）
 pub async fn get_project_stats_by_date(
     pool: &SqlitePool,
-    project_name: &Project,
+    project: &Project,
     date: &str,
 ) -> Result<ProjectStats, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (u64, u64)>(
         r#"
-        SELECT 
-            ? as project_name,
+        SELECT
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
-        WHERE project_name = ? 
+        FROM visits
+        WHERE project_name = ?
         AND DATE(created_at) = ?
         "#,
     )
-    .bind(project_name)
-    .bind(project_name)
+    .bind(project)
     .bind(date)
     .fetch_one(pool)
     .await
@@ -235,28 +234,26 @@ pub async fn get_project_stats_by_date(
         e
     })?;
 
-    Ok(stats)
+    Ok(ProjectStats::new(project.clone(), stats.0, stats.1))
 }
 
 /// 根据特定月份查询项目统计（格式：YYYY-MM）
 pub async fn get_project_stats_by_month(
     pool: &SqlitePool,
-    project_name: &Project,
+    project: &Project,
     year_month: &str,
 ) -> Result<ProjectStats, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (u64, u64)>(
         r#"
-        SELECT 
-            ? as project_name,
+        SELECT
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
-        WHERE project_name = ? 
+        FROM visits
+        WHERE project_name = ?
         AND strftime('%Y-%m', created_at) = ?
         "#,
     )
-    .bind(project_name)
-    .bind(project_name)
+    .bind(project)
     .bind(year_month)
     .fetch_one(pool)
     .await
@@ -265,28 +262,26 @@ pub async fn get_project_stats_by_month(
         e
     })?;
 
-    Ok(stats)
+    Ok(ProjectStats::new(project.clone(), stats.0, stats.1))
 }
 
 /// 根据特定年份查询项目统计（格式：YYYY）
 pub async fn get_project_stats_by_year(
     pool: &SqlitePool,
-    project_name: &Project,
+    project: &Project,
     year: &str,
 ) -> Result<ProjectStats, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (u64, u64)>(
         r#"
-        SELECT 
-            ? as project_name,
+        SELECT
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
-        WHERE project_name = ? 
+        FROM visits
+        WHERE project_name = ?
         AND strftime('%Y', created_at) = ?
         "#,
     )
-    .bind(project_name)
-    .bind(project_name)
+    .bind(project)
     .bind(year)
     .fetch_one(pool)
     .await
@@ -295,7 +290,7 @@ pub async fn get_project_stats_by_year(
         e
     })?;
 
-    Ok(stats)
+    Ok(ProjectStats::new(project.clone(), stats.0, stats.1))
 }
 
 /// 获取所有项目在特定日期的统计（格式：YYYY-MM-DD）
@@ -303,13 +298,13 @@ pub async fn get_all_projects_stats_by_date(
     pool: &SqlitePool,
     date: &str,
 ) -> Result<Vec<ProjectStats>, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (String, u64, u64)>(
         r#"
-        SELECT 
+        SELECT
             project_name,
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
+        FROM visits
         WHERE DATE(created_at) = ?
         GROUP BY project_name
         ORDER BY total_visits DESC
@@ -323,7 +318,10 @@ pub async fn get_all_projects_stats_by_date(
         e
     })?;
 
-    Ok(stats)
+    Ok(stats
+        .into_iter()
+        .map(|s| ProjectStats::new_unchecked(s.0, s.1, s.2))
+        .collect())
 }
 
 /// 获取所有项目在特定月份的统计（格式：YYYY-MM）
@@ -331,13 +329,13 @@ pub async fn get_all_projects_stats_by_month(
     pool: &SqlitePool,
     year_month: &str,
 ) -> Result<Vec<ProjectStats>, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (String, u64, u64)>(
         r#"
-        SELECT 
+        SELECT
             project_name,
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
+        FROM visits
         WHERE strftime('%Y-%m', created_at) = ?
         GROUP BY project_name
         ORDER BY total_visits DESC
@@ -351,7 +349,10 @@ pub async fn get_all_projects_stats_by_month(
         e
     })?;
 
-    Ok(stats)
+    Ok(stats
+        .into_iter()
+        .map(|s| ProjectStats::new_unchecked(s.0, s.1, s.2))
+        .collect())
 }
 
 /// 获取所有项目在特定年份的统计（格式：YYYY）
@@ -359,13 +360,13 @@ pub async fn get_all_projects_stats_by_year(
     pool: &SqlitePool,
     year: &str,
 ) -> Result<Vec<ProjectStats>, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (String, u64, u64)>(
         r#"
-        SELECT 
+        SELECT
             project_name,
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
+        FROM visits
         WHERE strftime('%Y', created_at) = ?
         GROUP BY project_name
         ORDER BY total_visits DESC
@@ -379,29 +380,30 @@ pub async fn get_all_projects_stats_by_year(
         e
     })?;
 
-    Ok(stats)
+    Ok(stats
+        .into_iter()
+        .map(|s| ProjectStats::new_unchecked(s.0, s.1, s.2))
+        .collect())
 }
 
 /// 根据日期范围查询项目统计（格式：YYYY-MM-DD）
 pub async fn get_project_stats_by_date_range(
     pool: &SqlitePool,
-    project_name: &Project,
+    project: &Project,
     start_date: &str,
     end_date: &str,
 ) -> Result<ProjectStats, sqlx::Error> {
-    let stats = query_as::<_, ProjectStats>(
+    let stats = query_as::<_, (u64, u64)>(
         r#"
-        SELECT 
-            ? as project_name,
+        SELECT
             COUNT(*) as total_visits,
             COUNT(DISTINCT ip_address) as unique_visitors
-        FROM visits 
-        WHERE project_name = ? 
+        FROM visits
+        WHERE project_name = ?
         AND DATE(created_at) BETWEEN ? AND ?
         "#,
     )
-    .bind(project_name)
-    .bind(project_name)
+    .bind(project)
     .bind(start_date)
     .bind(end_date)
     .fetch_one(pool)
@@ -411,5 +413,5 @@ pub async fn get_project_stats_by_date_range(
         e
     })?;
 
-    Ok(stats)
+    Ok(ProjectStats::new(project.clone(), stats.0, stats.1))
 }
