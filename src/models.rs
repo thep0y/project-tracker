@@ -23,10 +23,19 @@ impl Project {
 
     pub fn icon(&self) -> &'static str {
         match self {
-            Project::Dwall => "https://raw.githubusercontent.com/dwall-rs/dwall/refs/heads/main/src-tauri/icons/icon.ico",
-            Project::Lsar => "https://raw.githubusercontent.com/alley-rs/lsar/refs/heads/main/src-tauri/icons/icon.ico",
-            Project::UP2B => "https://raw.githubusercontent.com/up2b/up2b/refs/heads/main/src-tauri/icons/icon.ico",
-            Project::Fluxy => "https://raw.githubusercontent.com/alley-rs/fluxy/refs/heads/main/src-tauri/icons/icon.ico",}
+            Project::Dwall => {
+                "https://raw.githubusercontent.com/dwall-rs/dwall/refs/heads/main/src-tauri/icons/icon.ico"
+            }
+            Project::Lsar => {
+                "https://raw.githubusercontent.com/alley-rs/lsar/refs/heads/main/src-tauri/icons/icon.ico"
+            }
+            Project::UP2B => {
+                "https://raw.githubusercontent.com/up2b/up2b/refs/heads/main/src-tauri/icons/icon.ico"
+            }
+            Project::Fluxy => {
+                "https://raw.githubusercontent.com/alley-rs/fluxy/refs/heads/main/src-tauri/icons/icon.ico"
+            }
+        }
     }
 
     pub fn description(&self) -> &'static str {
@@ -35,6 +44,18 @@ impl Project {
             Project::Lsar => "聚合多个平台的直播解析程序，目前支持斗鱼、虎牙、抖音、B站、Bigo",
             Project::UP2B => "支持多个图床的图床管理程序",
             Project::Fluxy => "轻量、快速的文件传输工具",
+        }
+    }
+}
+
+impl From<&String> for Project {
+    fn from(value: &String) -> Self {
+        match value.to_ascii_lowercase().as_str() {
+            "dwall" => Project::Dwall,
+            "lsar" => Project::Lsar,
+            "fluxy" => Project::Lsar,
+            "up2b" => Project::UP2B,
+            _ => panic!("无效的项目名称"),
         }
     }
 }
@@ -61,11 +82,39 @@ pub struct Visit {
     pub created_at: time::OffsetDateTime,
 }
 
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectStats {
     pub project_name: Project,
-    pub total_visits: i64,
-    pub unique_visitors: i64,
+    pub repository: String,
+    pub icon: String,
+    pub description: String,
+    pub total_visits: u64,
+    pub unique_visitors: u64,
+}
+
+impl ProjectStats {
+    pub fn new(project: Project, total_visits: u64, unique_visitors: u64) -> Self {
+        Self {
+            repository: project.repository().to_string(),
+            icon: project.icon().to_string(),
+            description: project.description().to_string(),
+            project_name: project,
+            total_visits,
+            unique_visitors,
+        }
+    }
+
+    pub fn new_unchecked(project: String, total_visits: u64, unique_visitors: u64) -> Self {
+        let project = Project::from(&project);
+        Self {
+            repository: project.repository().to_string(),
+            icon: project.icon().to_string(),
+            description: project.description().to_string(),
+            project_name: project,
+            total_visits,
+            unique_visitors,
+        }
+    }
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -86,8 +135,8 @@ pub struct ProjectDetailedStats {
     pub repository: String,
     pub icon: String,
     pub description: String,
-    pub total_visits: i64,
-    pub unique_visitors: i64,
+    pub total_visits: u64,
+    pub unique_visitors: u64,
     pub country_stats: Vec<CountryStats>,
     pub recent_visits: Vec<Visit>,
 }
